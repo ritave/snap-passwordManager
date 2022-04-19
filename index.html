@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
     <title>Hello, Snaps!</title>
-    <link rel="icon" type="image/svg" href="./images/icon.svg"/>
+    <link rel="icon" type="image/svg" href="./images/icon.svg" />
   </head>
 
   <body>
@@ -14,52 +14,134 @@
         <li>Please note that:</li>
         <ul>
           <li>
-            The <code>snap.manifest.json</code> and <code>package.json</code> must be located in the server root directory..
+            The <code>snap.manifest.json</code> and
+            <code>package.json</code> must be located in the server root
+            directory..
           </li>
           <li>
-            The Snap bundle must be hosted at the location specified by the <code>location</code> field of <code>snap.manifest.json</code>.
+            The Snap bundle must be hosted at the location specified by the
+            <code>location</code> field of <code>snap.manifest.json</code>.
           </li>
         </ul>
       </ul>
     </details>
-    <br/>
+    <br />
 
     <button class="connect">Connect</button>
-    <button class="sendHello">Send Hello</button>
+    <div>
+      <input type="text" placeholder="Website" id="save_website" />
+      <input type="text" placeholder="Username" id="save_username" />
+      <input type="password" id="save_password" />
+      <button id="save">Save password</button>
+    </div>
+    <div>
+      <button id="clear">Clear everything</button>
+    </div>
+    <div>
+      <input
+        type="text"
+        placeholder="Search passwords"
+        id="password_search"
+      /><br />
+      <ul id="password_list"></ul>
+    </div>
   </body>
 
   <script>
     const snapId = `local:${window.location.href}`;
 
-    const connectButton = document.querySelector('button.connect')
-    const sendButton = document.querySelector('button.sendHello')
+    const connectButton = document.querySelector('button.connect');
+    const searchInput = document.querySelector('input#password_search');
+    const searchList = document.querySelector('ul#password_list');
+    const websiteInput = document.querySelector('input#save_website');
+    const usernameInput = document.querySelector('input#save_username');
+    const passwordInput = document.querySelector('input#save_password');
+    const saveButton = document.querySelector('button#save');
+    const clearButton = document.querySelector('button#clear');
 
-    connectButton.addEventListener('click', connect)
-    sendButton.addEventListener('click', send)
+    connectButton.addEventListener('click', connect);
+    searchInput.addEventListener('input', (e) =>
+      searchDebounced(e.target.value.trim()),
+    );
+    saveButton.addEventListener('click', () =>
+      savePassword(
+        websiteInput.value.trim(),
+        usernameInput.value.trim(),
+        passwordInput.value.trim(),
+      ),
+    );
+    clearButton.addEventListener('click', clear);
 
     // here we get permissions to interact with and install the snap
-    async function connect () {
+    async function connect() {
       await ethereum.request({
         method: 'wallet_enable',
-        params: [{
-          wallet_snap: { [snapId]: {} },
-        }]
-      })
+        params: [
+          {
+            wallet_snap: { [snapId]: {} },
+          },
+        ],
+      });
+      await search();
+      alert('Connected');
     }
 
-    // here we call the snap's "hello" method
-    async function send () {
-      try {
-        const response = await ethereum.request({
-          method: 'wallet_invokeSnap',
-          params: [snapId, {
-            method: 'hello'
-          }]
-        })
-      } catch (err) {
-        console.error(err)
-        alert('Problem happened: ' + err.message || err)
+    function debounce(func, timeout = 250) {
+      let timer;
+      return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), timeout);
+      };
+    }
+
+    async function search(pattern = searchInput.value) {
+      const results = await ethereum.request({
+        method: 'wallet_invokeSnap',
+        params: [snapId, { method: 'search', pattern }],
+      });
+
+      const searchHtml = results.reduce(
+        (acc, result) =>
+          (acc += `<li onclick="showPasssword('${result}')">${result}</li>\n`),
+        '',
+      );
+
+      searchList.innerHTML = searchHtml;
+    }
+
+    const searchDebounced = debounce(search);
+
+    async function savePassword(website, username, password) {
+      await ethereum.request({
+        method: 'wallet_invokeSnap',
+        params: [
+          snapId,
+          { method: 'save_password', website, username, password },
+        ],
+      });
+      await search();
+      alert('Password saved');
+    }
+
+    async function showPasssword(website) {
+      const result = await ethereum.request({
+        method: 'wallet_invokeSnap',
+        params: [snapId, { method: 'get_password', website }],
+      });
+      if (result !== undefined) {
+        alert(
+          `Website: "${website}", username: "${result.username}", password: "${result.password}"`,
+        );
       }
+    }
+
+    async function clear() {
+      await ethereum.request({
+        method: 'wallet_invokeSnap',
+        params: [snapId, { method: 'clear' }],
+      });
+      await search();
+      alert('Cleared');
     }
   </script>
 </html>
