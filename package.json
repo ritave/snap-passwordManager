@@ -50,6 +50,7 @@
     "node": ">=14.0.0"
   },
   "dependencies": {
+    "@metamask/browser-passworder": "^3.0.0",
     "async-mutex": "^0.3.2"
   }
 }

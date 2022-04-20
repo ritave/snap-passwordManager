@@ -1,4 +1,5 @@
 import { Mutex } from 'async-mutex';
+import * as passworder from '@metamask/browser-passworder';
 
 function fuzzySearch(haystack, needle) {
   let regexPattern = '.*';
@@ -15,31 +16,44 @@ function fuzzySearch(haystack, needle) {
   }, []);
 }
 
+async function getPasswords(entropy) {
+  const state = await wallet.request({
+    method: 'snap_manageState',
+    params: ['get'],
+  });
+  if (state === null) {
+    return {};
+  }
+  return await passworder.decrypt(entropy.key, state.passwords);
+}
+
+async function savePasswords(entropy, newState) {
+  const encryptedState = {
+    passwords: await passworder.encrypt(entropy.key, newState),
+  };
+  await wallet.request({
+    method: 'snap_manageState',
+    params: ['update', encryptedState],
+  });
+}
+
 const saveMutext = new Mutex();
 
 wallet.registerRpcMessageHandler(async (originString, requestObject) => {
-  const state =
-    (await wallet.request({ method: 'snap_manageState', params: ['get'] })) ??
-    {};
+  const entropy = await wallet.request({ method: 'snap_getBip44Entropy_0' });
+  const state = await getPasswords(entropy);
 
   let website, username, password;
   switch (requestObject.method) {
     case 'save_password':
       ({ website, username, password } = requestObject);
       await saveMutext.runExclusive(async () => {
-        const oldState =
-          (await wallet.request({
-            method: 'snap_manageState',
-            params: ['get'],
-          })) ?? {};
+        const oldState = await getPasswords(entropy);
         const newState = {
           ...oldState,
           [website]: { username, password },
         };
-        await wallet.request({
-          method: 'snap_manageState',
-          params: ['update', newState],
-        });
+        await savePasswords(entropy, newState);
       });
       return 'OK';
     case 'get_password':
