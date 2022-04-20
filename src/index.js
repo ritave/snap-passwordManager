@@ -21,7 +21,10 @@ async function getPasswords(entropy) {
     method: 'snap_manageState',
     params: ['get'],
   });
-  if (state === null) {
+  if (
+    state === null ||
+    (typeof state === 'object' && state.passwords === undefined)
+  ) {
     return {};
   }
   return await passworder.decrypt(entropy.key, state.passwords);
@@ -40,7 +43,9 @@ async function savePasswords(entropy, newState) {
 const saveMutext = new Mutex();
 
 wallet.registerRpcMessageHandler(async (originString, requestObject) => {
-  const entropy = await wallet.request({ method: 'snap_getBip44Entropy_0' });
+  const entropy = await wallet.request({
+    method: 'snap_getBip44Entropy_69420',
+  });
   const state = await getPasswords(entropy);
 
   let website, username, password;
@@ -76,7 +81,10 @@ wallet.registerRpcMessageHandler(async (originString, requestObject) => {
       const { pattern } = requestObject;
       return fuzzySearch(Object.keys(state), pattern);
     case 'clear':
-      await wallet.request({ method: 'snap_manageState', params: ['clear'] });
+      await wallet.request({
+        method: 'snap_manageState',
+        params: ['update', {}],
+      });
       return 'OK';
     default:
       throw new Error('Method not found.');
