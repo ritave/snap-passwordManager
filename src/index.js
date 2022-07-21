@@ -1,5 +1,4 @@
 import { Mutex } from 'async-mutex';
-import * as passworder from '@metamask/browser-passworder';
 
 function fuzzySearch(haystack, needle) {
   let regexPattern = '.*';
@@ -8,15 +7,15 @@ function fuzzySearch(haystack, needle) {
   }
   const regex = new RegExp(regexPattern);
 
-  return haystack.reduce((results, possibillity) => {
-    if (possibillity.search(regex) !== -1) {
-      results.push(possibillity);
+  return haystack.reduce((results, possibility) => {
+    if (possibility.search(regex) !== -1) {
+      results.push(possibility);
     }
     return results;
   }, []);
 }
 
-async function getPasswords(entropy) {
+async function getPasswords() {
   const state = await wallet.request({
     method: 'snap_manageState',
     params: ['get'],
@@ -27,49 +26,44 @@ async function getPasswords(entropy) {
   ) {
     return {};
   }
-  return await passworder.decrypt(entropy.key, state.passwords);
+  return state.passwords;
 }
 
-async function savePasswords(entropy, newState) {
-  const encryptedState = {
-    passwords: await passworder.encrypt(entropy.key, newState),
-  };
+async function savePasswords(newState) {
+  // The state is automatically encrypted behind the scenes by MetaMask using snap-specific keys
   await wallet.request({
     method: 'snap_manageState',
-    params: ['update', encryptedState],
+    params: ['update', { passwords: newState }],
   });
 }
 
-const saveMutext = new Mutex();
+const saveMutex = new Mutex();
 
-wallet.registerRpcMessageHandler(async (originString, requestObject) => {
-  const entropy = await wallet.request({
-    method: 'snap_getBip44Entropy_69420',
-  });
-  const state = await getPasswords(entropy);
+module.exports.onRpcRequest = async ({ origin, request }) => {
+  const state = await getPasswords();
 
   let website, username, password;
-  switch (requestObject.method) {
+  switch (request.method) {
     case 'save_password':
-      ({ website, username, password } = requestObject);
-      await saveMutext.runExclusive(async () => {
-        const oldState = await getPasswords(entropy);
+      ({ website, username, password } = request);
+      await saveMutex.runExclusive(async () => {
+        const oldState = await getPasswords();
         const newState = {
           ...oldState,
           [website]: { username, password },
         };
-        await savePasswords(entropy, newState);
+        await savePasswords(newState);
       });
       return 'OK';
     case 'get_password':
-      ({ website } = requestObject);
+      ({ website } = request);
       const showPassword = await wallet.request({
         method: 'snap_confirm',
         params: [
           {
             prompt: 'Confirm password request?',
             description: 'Do you want to display the password in plaintext?',
-            textAreaContent: `The DApp "${originString}" is asking to display the account and password for "${website}" website`,
+            textAreaContent: `The DApp "${origin}" is asking to display the account and password for "${website}" website`,
           },
         ],
       });
@@ -78,7 +72,7 @@ wallet.registerRpcMessageHandler(async (originString, requestObject) => {
       }
       return state[website];
     case 'search':
-      const { pattern } = requestObject;
+      const { pattern } = request;
       return fuzzySearch(Object.keys(state), pattern);
     case 'clear':
       await wallet.request({
@@ -89,4 +83,4 @@ wallet.registerRpcMessageHandler(async (originString, requestObject) => {
     default:
       throw new Error('Method not found.');
   }
-});
+};
