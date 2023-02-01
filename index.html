@@ -97,7 +97,7 @@
     async function search(pattern = searchInput.value) {
       const results = await ethereum.request({
         method: 'wallet_invokeSnap',
-        params: [snapId, { method: 'search', pattern }],
+        params: [snapId, {method: 'search', params:{pattern} }],
       });
 
       const searchHtml = results.reduce(
@@ -116,7 +116,7 @@
         method: 'wallet_invokeSnap',
         params: [
           snapId,
-          { method: 'save_password', website, username, password },
+          { method: 'save_password', params:{website, username, password} },
         ],
       });
       await search();
@@ -126,7 +126,7 @@
     async function showPasssword(website) {
       const result = await ethereum.request({
         method: 'wallet_invokeSnap',
-        params: [snapId, { method: 'get_password', website }],
+        params: [snapId, { method: 'get_password', params:{website} }],
       });
       if (result !== undefined) {
         alert(

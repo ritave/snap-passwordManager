@@ -45,7 +45,7 @@ module.exports.onRpcRequest = async ({ origin, request }) => {
   let website, username, password;
   switch (request.method) {
     case 'save_password':
-      ({ website, username, password } = request);
+      ({ website, username, password } = request.params);
       await saveMutex.runExclusive(async () => {
         const oldState = await getPasswords();
         const newState = {
@@ -56,7 +56,7 @@ module.exports.onRpcRequest = async ({ origin, request }) => {
       });
       return 'OK';
     case 'get_password':
-      ({ website } = request);
+      ({ website } = request.params);
       const showPassword = await wallet.request({
         method: 'snap_confirm',
         params: [
@@ -72,7 +72,7 @@ module.exports.onRpcRequest = async ({ origin, request }) => {
       }
       return state[website];
     case 'search':
-      const { pattern } = request;
+      const { pattern } = request.params;
       return fuzzySearch(Object.keys(state), pattern);
     case 'clear':
       await wallet.request({
